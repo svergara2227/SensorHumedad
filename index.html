@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Configuración básica de la página -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Sensores</title>
+
+    <!-- Enlace a la hoja de estilos -->
+    <link rel="stylesheet" href="../static/style.css">
+
+    <!-- Enlace a la librería Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<div class="container">
+    <h1>Monitor de Sensores</h1>
+
+    <!-- Sección de formularios para seleccionar sensor, cultivo y fecha -->
+    <div class="form-container">
+        <div class="form-control">
+            <!-- Selector para elegir el ID del sensor -->
+            <label for="sensor-id">ID del Sensor:</label>
+            <select id="sensor-id" onchange="cargarFechas()">
+                <option value="">Seleccione un sensor</option>
+            </select>
+        </div>
+        <div class="form-control">
+            <!-- Selector para elegir el tipo de cultivo -->
+            <label for="tipo-cultivo">Tipo de Cultivo:</label>
+            <select id="tipo-cultivo" disabled>
+                <option value="">Seleccione un cultivo</option>
+            </select>
+        </div>
+        <div class="form-control">
+            <!-- Selector para elegir una fecha -->
+            <label for="fecha">Fecha:</label>
+            <select id="fecha">
+                <option value="">Seleccione una fecha</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Botones para consultar y generar datos -->
+    <div class="form-container">
+        <button onclick="consultarDatos()">Consultar</button>
+        <button onclick="generarDatos()">Generar Datos</button>
+    </div>
+
+    <!-- Gráfico para mostrar los valores del sensor -->
+    <canvas id="grafico"></canvas>
+
+    <!-- Tabla para mostrar los datos detallados -->
+    <table id="tabla">
+        <thead>
+        <tr>
+            <th>Fecha</th>
+            <th>Hora</th>
+            <th>ID del Sensor</th>
+            <th>Cultivo</th>
+            <th>Estación</th>
+            <th>Valor</th>
+            <th>Necesita Riego</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<script>
+    // Variables globales para etiquetas, valores y estados de riego
+    let etiquetas = [];
+    let valores = [];
+    let necesitaRiego = [];
+
+    // Inicialización al cargar el contenido de la página
+    document.addEventListener("DOMContentLoaded", () => {
+        cargarSensores();  // Cargar la lista de sensores desde la API
+        inicializarGrafica();  // Configurar el gráfico
+    });
+
+    // Función para inicializar el gráfico usando Chart.js
+    const inicializarGrafica = () => {
+        const ctx = document.getElementById('grafico').getContext('2d');
+        window.miGrafico = new Chart(ctx, {
+            type: 'line',  // Tipo de gráfico (línea)
+            data: {
+                labels: etiquetas,  // Etiquetas en el eje X
+                datasets: [{
+                    label: 'Valor del Sensor',  // Etiqueta del dataset
+                    data: valores,  // Valores en el eje Y
+                    borderColor: 'rgba(75, 192, 192, 1)',  // Color de la línea
+                    borderWidth: 2,
+                    fill: false,  // No llenar el área bajo la línea
+                    pointBackgroundColor: [],  // Colores de los puntos
+                    pointRadius: 5  // Tamaño de los puntos
+                }]
+            },
+            options: {
+                responsive: true,  // Adaptar tamaño automáticamente
+                scales: {
+                    x: { title: { display: true, text: 'Hora' } },  // Título del eje X
+                    y: { title: { display: true, text: 'Valor' } }   // Título del eje Y
+                }
+            }
+        });
+    };
+
+    // Función para actualizar los datos en el gráfico
+    const actualizarGrafica = () => {
+        window.miGrafico.data.labels = etiquetas;
+        window.miGrafico.data.datasets[0].data = valores;
+        window.miGrafico.data.datasets[0].pointBackgroundColor = necesitaRiego.map(necesita => (necesita ? 'red' : 'rgba(75, 192, 192, 1)'));
+        window.miGrafico.update();  // Actualizar el gráfico
+    };
+
+    // Función para generar datos aleatorios llamando a la API
+    const generarDatos = async () => {
+        try {
+            const response = await fetch('/api/generar-datos', { method: 'POST' });
+            const resultado = await response.json();
+
+            if (response.ok) {
+                alert(`Datos generados correctamente:\nCultivo: ${resultado.datos.cultivo}\nValor: ${resultado.datos.valor}\nEstación: ${resultado.datos.estacion}`);
+
+                // Actualizar vista si los datos generados coinciden con el filtro actual
+                const filtroSensorId = document.getElementById('sensor-id').value;
+                const filtroCultivo = document.getElementById('tipo-cultivo').value;
+                const filtroFecha = document.getElementById('fecha').value;
+
+                if (
+                    filtroSensorId === resultado.datos.idsensor &&
+                    filtroCultivo === resultado.datos.cultivo &&
+                    filtroFecha === resultado.datos.fecha
+                ) {
+                    agregarFila(resultado.datos);
+                }
+
+                agregarASensores(resultado.datos.idsensor);
+            } else {
+                alert(resultado.error || "Error al generar los datos.");
+            }
+        } catch (error) {
+            alert("Error al comunicarse con el servidor.");
+            console.error(error);
+        }
+    };
+
+    // Función para agregar una fila a la tabla con los datos recibidos
+    const agregarFila = (dato) => {
+        const tablaBody = document.querySelector("#tabla tbody");
+        const fila = `
+            <tr>
+                <td>${dato.fecha}</td>
+                <td>${dato.hora}</td>
+                <td>${dato.idsensor}</td>
+                <td>${dato.cultivo}</td>
+                <td>${dato.estacion}</td>
+                <td>${dato.valor}</td>
+                <td>${dato.necesita_riego ? "Sí" : "No"}</td>
+            </tr>
+        `;
+        tablaBody.innerHTML += fila;
+
+        etiquetas.push(dato.hora);
+        valores.push(dato.valor);
+        necesitaRiego.push(dato.necesita_riego);
+
+        actualizarGrafica();
+    };
+
+    // Función para agregar un sensor al selector si no está incluido
+    const agregarASensores = (idsensor) => {
+        const sensorSelect = document.getElementById('sensor-id');
+        if (![...sensorSelect.options].some(option => option.value === idsensor)) {
+            const option = document.createElement('option');
+            option.value = idsensor;
+            option.textContent = idsensor;
+            sensorSelect.appendChild(option);
+        }
+    };
+
+    // Función para cargar los sensores disponibles desde la API
+    const cargarSensores = async () => {
+        try {
+            const response = await fetch('/api/sensores');
+            const sensores = await response.json();
+
+            if (response.ok) {
+                const sensorSelect = document.getElementById('sensor-id');
+                sensorSelect.innerHTML = '<option value="">Seleccione un sensor</option>';
+                sensores.forEach(sensor => agregarASensores(sensor));
+            } else {
+                alert(sensores.error || "Error al cargar los sensores.");
+            }
+        } catch (error) {
+            alert("Error al comunicarse con el servidor.");
+            console.error(error);
+        }
+    };
+
+    // Función para consultar datos del servidor
+    const consultarDatos = async () => {
+        const sensorId = document.getElementById('sensor-id').value;
+        const fecha = document.getElementById('fecha').value;
+        const cultivo = document.getElementById('tipo-cultivo').value;
+
+        if (!sensorId || !fecha || !cultivo) {
+            alert("Por favor, selecciona el sensor, el tipo de cultivo y la fecha.");
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/sensor?idsensor=${sensorId}&fecha=${fecha}&cultivo=${cultivo}`);
+            const datos = await response.json();
+
+            if (response.ok) {
+                mostrarDatos(datos);
+            } else {
+                alert(datos.error || "Error al obtener los datos.");
+            }
+        } catch (error) {
+            alert("Error al comunicarse con el servidor.");
+            console.error(error);
+        }
+    };
+
+    // Mostrar los datos en la tabla y actualizar el gráfico
+    const mostrarDatos = (datos) => {
+        const tablaBody = document.querySelector("#tabla tbody");
+        tablaBody.innerHTML = "";
+        etiquetas = [];
+        valores = [];
+        necesitaRiego = [];
+
+        datos.forEach(dato => agregarFila(dato));
+    };
+
+    // Cargar las fechas disponibles para un sensor
+    const cargarFechas = async () => {
+        const sensorId = document.getElementById('sensor-id').value;
+        const cultivoSelect = document.getElementById('tipo-cultivo');
+
+        if (!sensorId) {
+            document.getElementById('fecha').innerHTML = '<option value="">Seleccione una fecha</option>';
+            cultivoSelect.innerHTML = '<option value="">Seleccione un cultivo</option>';
+            cultivoSelect.disabled = true;
+            return;
+        }
+
+        try {
+            const fechaResponse = await fetch(`/api/fechas?idsensor=${sensorId}`);
+            const fechas = await fechaResponse.json();
+
+            if (fechaResponse.ok) {
+                const fechaSelect = document.getElementById('fecha');
+                fechaSelect.innerHTML = '<option value="">Seleccione una fecha</option>';
+                fechas.forEach(fecha => {
+                    const option = document.createElement('option');
+                    option.value = fecha;
+                    option.textContent = fecha;
+                    fechaSelect.appendChild(option);
+                });
+            } else {
+                alert(fechas.error || "Error al cargar las fechas.");
+            }
+
+            await cargarCultivos(sensorId);
+        } catch (error) {
+            alert("Error al comunicarse con el servidor.");
+            console.error(error);
+        }
+    };
+
+    // Cargar los cultivos disponibles para un sensor
+    const cargarCultivos = async (sensorId) => {
+        try {
+            const response = await fetch(`/api/cultivos?idsensor=${sensorId}`);
+            const cultivos = await response.json();
+
+            if (response.ok) {
+                const cultivoSelect = document.getElementById('tipo-cultivo');
+                cultivoSelect.innerHTML = '<option value="">Seleccione un cultivo</option>';
+                cultivos.forEach(cultivo => {
+                    const option = document.createElement('option');
+                    option.value = cultivo;
+                    option.textContent = cultivo;
+                    cultivoSelect.appendChild(option);
+                });
+                cultivoSelect.disabled = false;
+            } else {
+                alert(cultivos.error || "Error al cargar los cultivos.");
+            }
+        } catch (error) {
+            alert("Error al comunicarse con el servidor.");
+            console.error(error);
+        }
+    };
+</script>
+</body>
+</html>
