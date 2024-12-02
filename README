@@ -1,0 +1,34 @@
+Monitor de Sensores - Backend
+Este proyecto proporciona una API para gestionar y consultar datos de sensores de cultivos, usando Flask y Firebase Realtime Database.
+
+Requisitos
+Python 3.x
+Dependencias: Flask y firebase-admin
+
+Pasos para empezar
+pip install Flask firebase-admin
+
+4. Configurar Firebase
+
+Crea un proyecto en Firebase Console.
+Activa Realtime Database.
+Descarga las credenciales JSON de servicio desde Project Settings > Service accounts.
+Coloca el archivo JSON en la raíz del proyecto y actualiza la ruta del archivo en el código (app.py):
+cred = credentials.Certificate("<ruta-a-tu-archivo-json>")
+'databaseURL': 'URL-de-tu-base-de-datos'
+
+5. Ejecutar el servidor
+
+Inicia el servidor de Flask:
+python app.py
+
+El servidor estará disponible en:
+http://127.0.0.1:5000/
+
+Endpoints disponibles
+POST /api/generar-datos: Genera datos aleatorios y los guarda en Firebase.
+POST /api/sensor: Guarda datos de sensor en Firebase.
+GET /api/sensor: Consulta datos de un sensor por fecha y cultivo.
+GET /api/sensores: Obtiene la lista de sensores disponibles.
+GET /api/fechas: Obtiene las fechas disponibles para un sensor.
+GET /api/cultivos: Obtiene los cultivos disponibles para un sensor.
